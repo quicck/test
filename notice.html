@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ブラウザ通知マネージャー</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #f3f4f6;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+        .card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="card w-full max-w-md p-8">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6 text-center">🔔 通知設定</h1>
+
+        <!-- 権限リクエストセクション -->
+        <div id="permission-banner" class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+            通知を送るには、ブラウザで許可を与える必要があります。
+            <button onclick="requestPermission()" class="mt-2 block font-semibold underline">許可をリクエストする</button>
+        </div>
+
+        <div class="space-y-6">
+            <!-- 即時通知 -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">即時実行</label>
+                <button 
+                    onclick="sendImmediateNotification()" 
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200">
+                    今すぐ送る
+                </button>
+            </div>
+
+            <hr class="border-gray-200">
+
+            <!-- スケジュール通知 -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">日時を指定して実行</label>
+                <input 
+                    type="datetime-local" 
+                    id="schedule-time" 
+                    class="w-full mb-3 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                >
+                <button 
+                    onclick="scheduleNotification()" 
+                    class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200">
+                    あとで送る（予約）
+                </button>
+            </div>
+        </div>
+
+        <!-- ログ表示用 -->
+        <div id="status-log" class="mt-6 text-xs text-gray-500 text-center"></div>
+    </div>
+
+    <script>
+        const logElement = document.getElementById('status-log');
+        const permissionBanner = document.getElementById('permission-banner');
+
+        // ページ読み込み時に権限状態をチェック
+        window.onload = () => {
+            checkPermission();
+            // デフォルトで現在時刻から1分後をセット
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + 1);
+            document.getElementById('schedule-time').value = now.toISOString().slice(0, 16);
+        };
+
+        function checkPermission() {
+            if (Notification.permission === 'granted') {
+                permissionBanner.style.display = 'none';
+                updateLog("通知は許可されています。");
+            } else if (Notification.permission === 'denied') {
+                permissionBanner.innerHTML = "通知がブロックされています。ブラウザの設定から変更してください。";
+                permissionBanner.classList.replace('bg-blue-50', 'bg-red-50');
+                permissionBanner.classList.replace('text-blue-700', 'text-red-700');
+            }
+        }
+
+        async function requestPermission() {
+            const permission = await Notification.requestPermission();
+            checkPermission();
+            if (permission === 'granted') {
+                new Notification("設定完了", { body: "通知が許可されました！" });
+            }
+        }
+
+        function updateLog(message) {
+            logElement.innerText = message;
+        }
+
+        // 通知を送る共通関数
+        function triggerNotification(title, message) {
+            if (Notification.permission === 'granted') {
+                const options = {
+                    body: message,
+                    icon: 'https://cdn-icons-png.flaticon.com/512/3119/3119338.png'
+                };
+                new Notification(title, options);
+            } else {
+                alert("通知が許可されていません。");
+            }
+        }
+
+        // 1. 今すぐ送る
+        function sendImmediateNotification() {
+            updateLog("即時通知を送信しました。");
+            triggerNotification("テスト", "今すぐ通知を送りました。");
+        }
+
+        // 2. あとで送る
+        function scheduleNotification() {
+            const inputTime = document.getElementById('schedule-time').value;
+            if (!inputTime) {
+                alert("日時を選択してください。");
+                return;
+            }
+
+            const targetTime = new Date(inputTime).getTime();
+            const now = new Date().getTime();
+            const delay = targetTime - now;
+
+            if (delay <= 0) {
+                alert("未来の時間を指定してください。");
+                return;
+            }
+
+            updateLog(`${Math.round(delay / 1000)}秒後に通知を予約しました...`);
+
+            setTimeout(() => {
+                triggerNotification("スケジュール通知", "設定された時間になりました。");
+                updateLog("予約された通知を送信しました。");
+            }, delay);
+        }
+    </script>
+</body>
+</html>
+
