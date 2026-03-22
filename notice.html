@@ -3,142 +3,141 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ブラウザ通知マネージャー</title>
+    <title>ブラウザ通知スケジューラー</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             background-color: #f3f4f6;
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-        }
-        .card {
-            background: white;
-            border-radius: 1rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: 'sans-serif';
         }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen p-4">
+<body>
 
-    <div class="card w-full max-w-md p-8">
-        <h1 class="text-2xl font-bold text-gray-800 mb-6 text-center">🔔 通知設定</h1>
+    <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6 text-center">通知スケジューラー</h1>
+        
+        <div id="status-message" class="mb-4 p-3 rounded-lg text-sm hidden"></div>
 
-        <!-- 権限リクエストセクション -->
-        <div id="permission-banner" class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-            通知を送るには、ブラウザで許可を与える必要があります。
-            <button onclick="requestPermission()" class="mt-2 block font-semibold underline">許可をリクエストする</button>
-        </div>
+        <div class="space-y-4">
+            <!-- 許可ボタン -->
+            <button id="request-permission" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                1. 通知の許可を求める
+            </button>
 
-        <div class="space-y-6">
-            <!-- 即時通知 -->
+            <hr class="border-gray-200 my-4">
+
+            <!-- タイマー設定 -->
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">即時実行</label>
-                <button 
-                    onclick="sendImmediateNotification()" 
-                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200">
-                    今すぐ送る
-                </button>
+                <label for="seconds" class="block text-sm font-medium text-gray-700 mb-1">何秒後に通知しますか？</label>
+                <input type="number" id="seconds" value="5" min="1" class="w-full border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
             </div>
 
-            <hr class="border-gray-200">
-
-            <!-- スケジュール通知 -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">日時を指定して実行</label>
-                <input 
-                    type="datetime-local" 
-                    id="schedule-time" 
-                    class="w-full mb-3 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                >
-                <button 
-                    onclick="scheduleNotification()" 
-                    class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200">
-                    あとで送る（予約）
-                </button>
-            </div>
+            <button id="schedule-notification" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200">
+                2. n秒後に通知を予約
+            </button>
         </div>
 
-        <!-- ログ表示用 -->
-        <div id="status-log" class="mt-6 text-xs text-gray-500 text-center"></div>
+        <p class="mt-6 text-xs text-gray-500 text-center">
+            ※通知をテストするには、ブラウザの設定でこのページからの通知を許可してください。<br>
+            ブラウザを完全に終了（プロセス終了）させている場合は、OSの制限により届かない場合があります。
+        </p>
     </div>
 
     <script>
-        const logElement = document.getElementById('status-log');
-        const permissionBanner = document.getElementById('permission-banner');
+        const statusMsg = document.getElementById('status-message');
+        const secondsInput = document.getElementById('seconds');
+        const requestBtn = document.getElementById('request-permission');
+        const scheduleBtn = document.getElementById('schedule-notification');
 
-        // ページ読み込み時に権限状態をチェック
-        window.onload = () => {
-            checkPermission();
-            // デフォルトで現在時刻から1分後をセット
-            const now = new Date();
-            now.setMinutes(now.getMinutes() + 1);
-            document.getElementById('schedule-time').value = now.toISOString().slice(0, 16);
-        };
+        // メッセージ表示関数
+        function showMessage(text, type) {
+            statusMsg.textContent = text;
+            statusMsg.className = `mb-4 p-3 rounded-lg text-sm ${type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
+            statusMsg.classList.remove('hidden');
+        }
 
-        function checkPermission() {
-            if (Notification.permission === 'granted') {
-                permissionBanner.style.display = 'none';
-                updateLog("通知は許可されています。");
-            } else if (Notification.permission === 'denied') {
-                permissionBanner.innerHTML = "通知がブロックされています。ブラウザの設定から変更してください。";
-                permissionBanner.classList.replace('bg-blue-50', 'bg-red-50');
-                permissionBanner.classList.replace('text-blue-700', 'text-red-700');
+        // 1. Service Workerの登録
+        // ブラウザを閉じても通知を送るためには、バックグラウンドで動くService Workerが必要です。
+        // ここでは、インラインでService Workerを定義してBlobとして登録します。
+        async function registerServiceWorker() {
+            const swCode = `
+                self.addEventListener('message', (event) => {
+                    if (event.data.type === 'SCHEDULE_NOTIFICATION') {
+                        const { delay, title, options } = event.data;
+                        setTimeout(() => {
+                            self.registration.showNotification(title, options);
+                        }, delay);
+                    }
+                });
+            `;
+            const blob = new Blob([swCode], { type: 'text/javascript' });
+            const swUrl = URL.createObjectURL(blob);
+            
+            try {
+                const registration = await navigator.serviceWorker.register(swUrl);
+                console.log('Service Worker registered');
+                return registration;
+            } catch (err) {
+                console.error('Service Worker registration failed:', err);
             }
         }
 
-        async function requestPermission() {
+        // 2. 通知の許可を求める
+        requestBtn.addEventListener('click', async () => {
+            if (!('Notification' in window)) {
+                showMessage('このブラウザは通知に対応していません。', 'error');
+                return;
+            }
+
             const permission = await Notification.requestPermission();
-            checkPermission();
             if (permission === 'granted') {
-                new Notification("設定完了", { body: "通知が許可されました！" });
-            }
-        }
-
-        function updateLog(message) {
-            logElement.innerText = message;
-        }
-
-        // 通知を送る共通関数
-        function triggerNotification(title, message) {
-            if (Notification.permission === 'granted') {
-                const options = {
-                    body: message,
-                    icon: 'https://cdn-icons-png.flaticon.com/512/3119/3119338.png'
-                };
-                new Notification(title, options);
+                showMessage('通知が許可されました！', 'success');
             } else {
-                alert("通知が許可されていません。");
+                showMessage('通知が拒否されました。設定を確認してください。', 'error');
             }
-        }
+        });
 
-        // 1. 今すぐ送る
-        function sendImmediateNotification() {
-            updateLog("即時通知を送信しました。");
-            triggerNotification("テスト", "今すぐ通知を送りました。");
-        }
-
-        // 2. あとで送る
-        function scheduleNotification() {
-            const inputTime = document.getElementById('schedule-time').value;
-            if (!inputTime) {
-                alert("日時を選択してください。");
+        // 3. 通知をスケジュールする
+        scheduleBtn.addEventListener('click', async () => {
+            if (Notification.permission !== 'granted') {
+                showMessage('まず最初に「通知の許可」ボタンを押して許可してください。', 'error');
                 return;
             }
 
-            const targetTime = new Date(inputTime).getTime();
-            const now = new Date().getTime();
-            const delay = targetTime - now;
-
-            if (delay <= 0) {
-                alert("未来の時間を指定してください。");
+            const seconds = parseInt(secondsInput.value);
+            if (isNaN(seconds) || seconds <= 0) {
+                showMessage('有効な秒数を入力してください。', 'error');
                 return;
             }
 
-            updateLog(`${Math.round(delay / 1000)}秒後に通知を予約しました...`);
+            showMessage(`${seconds}秒後に通知を送ります。タブを切り替えても大丈夫です。`, 'success');
 
+            // Service Worker経由で通知を発行
+            // 実際の実装では、サーバーからのプッシュ通知が理想的ですが、
+            // クライアントサイドのみで完結させるためにSWのshowNotificationを使用します。
+            const registration = await navigator.serviceWorker.ready;
+            
             setTimeout(() => {
-                triggerNotification("スケジュール通知", "設定された時間になりました。");
-                updateLog("予約された通知を送信しました。");
-            }, delay);
+                registration.showNotification('テスト', {
+                    body: `${seconds}秒経過しました。`,
+                    icon: 'https://cdn-icons-png.flaticon.com/512/1827/1827347.png',
+                    tag: 'test-notification', // 同じタグの通知は上書きされる
+                    requireInteraction: true // ユーザーが閉じるまで表示し続ける
+                });
+            }, seconds * 1000);
+        });
+
+        // 起動時にSW登録
+        if ('serviceWorker' in navigator) {
+            registerServiceWorker();
+        } else {
+            showMessage('お使いのブラウザはService Workerに対応していないため、バックグラウンド通知が制限される可能性があります。', 'error');
         }
     </script>
 </body>
