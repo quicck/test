@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Speedometer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .speed-display {
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center p-4">
+
+    <header class="w-full max-w-md text-center py-8">
+        <h1 class="text-2xl font-bold text-blue-400">SPEED TRACKER</h1>
+        <p class="text-slate-400 text-sm">GPS Real-time Monitoring</p>
+    </header>
+
+    <main class="w-full max-w-md flex-grow flex flex-col gap-6">
+        <!-- Speed Card -->
+        <div class="bg-slate-800 rounded-3xl p-8 shadow-2xl border border-slate-700 flex flex-col items-center">
+            <div class="text-sm font-medium text-slate-400 mb-2">CURRENT SPEED</div>
+            <div class="flex items-baseline gap-2">
+                <span id="speedValue" class="speed-display text-8xl font-black text-white">0.0</span>
+                <span class="text-2xl font-bold text-blue-500">km/h</span>
+            </div>
+        </div>
+
+        <!-- Details Grid -->
+        <div class="grid grid-cols-2 gap-4">
+            <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 text-center">
+                <div class="text-xs text-slate-400 mb-1">LATITUDE</div>
+                <div id="latValue" class="font-mono text-lg font-bold text-slate-200">--.----</div>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 text-center">
+                <div class="text-xs text-slate-400 mb-1">LONGITUDE</div>
+                <div id="lngValue" class="font-mono text-lg font-bold text-slate-200">--.----</div>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 text-center">
+                <div class="text-xs text-slate-400 mb-1">ACCURACY</div>
+                <div id="accValue" class="font-mono text-lg font-bold text-green-400">± --m</div>
+            </div>
+            <div class="bg-slate-800 p-4 rounded-2xl border border-slate-700 text-center">
+                <div class="text-xs text-slate-400 mb-1">ALTITUDE</div>
+                <div id="altValue" class="font-mono text-lg font-bold text-slate-200">-- m</div>
+            </div>
+        </div>
+
+        <!-- Status & Controls -->
+        <div class="flex flex-col gap-3 mt-4">
+            <div id="statusMessage" class="text-center text-sm py-2 px-4 rounded-full bg-slate-800 border border-slate-700 text-yellow-400">
+                Waiting for GPS signal...
+            </div>
+            <button id="toggleBtn" class="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold py-4 rounded-2xl transition-all shadow-lg">
+                START TRACKING
+            </button>
+        </div>
+
+        <!-- History Log -->
+        <div class="mt-4 flex-grow overflow-hidden flex flex-col">
+            <h2 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Location History</h2>
+            <div id="logContainer" class="bg-slate-950 rounded-xl p-3 h-32 overflow-y-auto text-[10px] font-mono text-slate-400 border border-slate-800">
+                <div>Log started...</div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="w-full max-w-md text-center py-6 text-slate-500 text-xs">
+        Note: High accuracy GPS may drain battery faster.<br>
+        Speed requires movement to be calculated accurately.
+    </footer>
+
+    <script>
+        let watchId = null;
+        const speedEl = document.getElementById('speedValue');
+        const latEl = document.getElementById('latValue');
+        const lngEl = document.getElementById('lngValue');
+        const accEl = document.getElementById('accValue');
+        const altEl = document.getElementById('altValue');
+        const statusEl = document.getElementById('statusMessage');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const logContainer = document.getElementById('logContainer');
+
+        function addLog(msg) {
+            const time = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.textContent = `[${time}] ${msg}`;
+            logContainer.prepend(div);
+        }
+
+        function updateDisplay(position) {
+            const coords = position.coords;
+            
+            // Convert speed from m/s to km/h
+            // position.coords.speed returns m/s. If null (not moving/no GPS), default to 0.
+            const speedMs = coords.speed || 0;
+            const speedKmh = (speedMs * 3.6).toFixed(1);
+
+            // Update UI
+            speedEl.textContent = speedKmh;
+            latEl.textContent = coords.latitude.toFixed(5);
+            lngEl.textContent = coords.longitude.toFixed(5);
+            accEl.textContent = `± ${Math.round(coords.accuracy)}m`;
+            altEl.textContent = coords.altitude ? `${Math.round(coords.altitude)} m` : '-- m';
+
+            statusEl.textContent = "Tracking active";
+            statusEl.className = "text-center text-sm py-2 px-4 rounded-full bg-blue-900/30 border border-blue-700 text-blue-400";
+            
+            addLog(`Speed: ${speedKmh}km/h | Acc: ${Math.round(coords.accuracy)}m`);
+        }
+
+        function handleError(error) {
+            let msg = "";
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    msg = "User denied Geolocation access.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    msg = "Location information is unavailable.";
+                    break;
+                case error.TIMEOUT:
+                    msg = "The request to get user location timed out.";
+                    break;
+                default:
+                    msg = "An unknown error occurred.";
+            }
+            statusEl.textContent = msg;
+            statusEl.className = "text-center text-sm py-2 px-4 rounded-full bg-red-900/30 border border-red-700 text-red-400";
+            addLog("Error: " + msg);
+            stopTracking();
+        }
+
+        function startTracking() {
+            if (!navigator.geolocation) {
+                alert("Geolocation is not supported by your browser");
+                return;
+            }
+
+            const options = {
+                enableHighAccuracy: true, // Force GPS
+                timeout: 5000,
+                maximumAge: 0
+            };
+
+            watchId = navigator.geolocation.watchPosition(updateDisplay, handleError, options);
+            
+            toggleBtn.textContent = "STOP TRACKING";
+            toggleBtn.classList.replace('bg-blue-600', 'bg-red-600');
+            toggleBtn.classList.replace('hover:bg-blue-500', 'hover:bg-red-500');
+            addLog("Started tracking...");
+        }
+
+        function stopTracking() {
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            toggleBtn.textContent = "START TRACKING";
+            toggleBtn.classList.replace('bg-red-600', 'bg-blue-600');
+            toggleBtn.classList.replace('hover:bg-red-500', 'hover:bg-blue-500');
+            statusEl.textContent = "Tracking stopped";
+            statusEl.className = "text-center text-sm py-2 px-4 rounded-full bg-slate-800 border border-slate-700 text-yellow-400";
+            addLog("Stopped tracking.");
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            if (watchId === null) {
+                startTracking();
+            } else {
+                stopTracking();
+            }
+        });
+
+        // Initialize state
+        window.onload = () => {
+            addLog("Ready to track.");
+        };
+    </script>
+</body>
+</html>
+
