@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Notification Tester Pro</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background: radial-gradient(120% 120% at 50% 0%, #fbfbfd 0%, #f5f5f7 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* HIG基準のプレミアムアクリルカード */
+    .ios-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03), 
+                  0 1px 3px rgba(0, 0, 0, 0.02);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-bounce {
+      transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.2s, box-shadow 0.2s;
+    }
+    .btn-bounce:active {
+      transform: scale(0.95);
+    }
+
+    .premium-shimmer {
+      background: linear-gradient(135deg, #ffffff 0%, #f6f8fa 50%, #eef2f7 100%);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9),
+                  0 10px 30px -10px rgba(0, 0, 0, 0.05);
+    }
+
+    .ios-input {
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      background-color: rgba(120, 120, 128, 0.08);
+    }
+    .ios-input:focus {
+      background-color: #ffffff;
+      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+      border-color: #007aff;
+    }
+
+    /* カウントダウン円形ゲージ用 */
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes slideIn {
+      0% { transform: translateY(100px) scale(0.9); opacity: 0; }
+      100% { transform: translateY(0) scale(1); opacity: 1; }
+    }
+    .toast-anim {
+      animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  </style>
+</head>
+<body class="flex flex-col items-center justify-center p-4 sm:p-6 text-[#1d1d1f] antialiased">
+
+  <!-- メインコンテンツ -->
+  <main class="w-full max-w-md mx-auto flex flex-col justify-between min-h-[90vh] py-6">
+    
+    <!-- ヘッダー部 -->
+    <div class="text-center mb-8 mt-4">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-white premium-shimmer mb-4">
+        <span class="relative flex h-8 w-8">
+          <i data-lucide="bell" class="w-8 h-8 text-[#007aff] filter drop-shadow-[0_2px_8px_rgba(0,122,255,0.3)]"></i>
+          <span class="absolute top-0 right-0 flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ff3b30] opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-[#ff3b30]"></span>
+          </span>
+        </span>
+      </div>
+      <h1 class="text-2xl font-bold tracking-tight bg-gradient-to-b from-[#1d1d1f] to-[#86868b] bg-clip-text text-transparent">
+        System Notification
+      </h1>
+      <p class="text-xs font-semibold text-[#86868b] uppercase tracking-widest mt-1">
+        APK Compatible Test
+      </p>
+    </div>
+
+    <!-- メインカード -->
+    <div class="ios-card rounded-[32px] p-6 sm:p-8 flex-grow flex flex-col justify-between">
+      
+      <!-- 設定エリア -->
+      <div class="space-y-6">
+        <div>
+          <label class="block text-xs font-semibold text-[#86868b] mb-2 uppercase tracking-wider pl-1">通知のタイトル</label>
+          <input type="text" id="notiTitle" value="テスト通知" 
+            class="ios-input w-full px-4 py-3.5 rounded-2xl text-base font-medium outline-none border border-transparent"
+            placeholder="タイトルを入力">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-[#86868b] mb-2 uppercase tracking-wider pl-1">通知の本文</label>
+          <textarea id="notiBody" rows="3" 
+            class="ios-input w-full px-4 py-3.5 rounded-2xl text-base font-medium outline-none border border-transparent resize-none"
+            placeholder="本文を入力してください。">アプリのバックグラウンド通知の疎通テストです。</textarea>
+        </div>
+
+        <!-- 許可ステータス（APKブリッジ対応） -->
+        <div class="flex items-center justify-between p-4 bg-[#f5f5f7] rounded-2xl">
+          <div class="flex items-center gap-3">
+            <div id="statusIcon" class="w-8 h-8 rounded-full flex items-center justify-center bg-amber-100 text-amber-500">
+              <i data-lucide="alert-circle" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <p class="text-xs text-[#86868b] font-medium">通知権限ステータス</p>
+              <p id="statusText" class="text-sm font-semibold text-amber-600">判定中...</p>
+            </div>
+          </div>
+          <button id="btnPermission" onclick="requestPermission()" 
+            class="px-4 py-2 bg-[#007aff] text-white text-xs font-bold rounded-full btn-bounce shadow-sm">
+            権限を要求
+          </button>
+        </div>
+      </div>
+
+      <!-- 送信コントロールエリア -->
+      <div class="mt-8 space-y-4">
+        <!-- 遅延秒数入力 -->
+        <div class="relative flex items-center bg-[#f5f5f7] rounded-2xl p-1">
+          <span class="pl-4 text-sm font-semibold text-[#86868b]">遅延時間</span>
+          <input type="number" id="delaySeconds" value="5" min="1" max="300"
+            class="w-full bg-transparent py-3 px-3 text-right text-lg font-bold text-[#007aff] focus:outline-none">
+          <span class="pr-4 pl-1 text-sm font-bold text-[#007aff]">秒後</span>
+        </div>
+
+        <!-- アクションボタン群 -->
+        <div class="grid grid-cols-2 gap-3">
+          <!-- 今すぐ送る -->
+          <button onclick="sendNow()" 
+            class="btn-bounce flex flex-col items-center justify-center p-4 rounded-2xl bg-gradient-to-br from-[#ffffff] to-[#f5f5f7] border border-white shadow-md shadow-gray-200/50 hover:shadow-lg transition-all">
+            <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center mb-2">
+              <i data-lucide="send" class="w-5 h-5 text-[#007aff]"></i>
+            </div>
+            <span class="text-xs font-bold text-[#1d1d1f]">今すぐ送る</span>
+          </button>
+
+          <!-- 時間を空けて送る -->
+          <button onclick="sendLater()" 
+            class="btn-bounce flex flex-col items-center justify-center p-4 rounded-2xl bg-[#007aff] text-white shadow-lg shadow-blue-500/20 hover:bg-[#0066d6] transition-all">
+            <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center mb-2">
+              <i data-lucide="clock" class="w-5 h-5 text-white"></i>
+            </div>
+            <span class="text-xs font-bold">時間を空けて送る</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- カウントダウンオーバーレイ -->
+    <div id="countdownOverlay" class="hidden fixed inset-0 bg-black/15 backdrop-blur-md z-40 flex items-center justify-center p-6">
+      <div class="bg-white/95 backdrop-blur-2xl rounded-[32px] p-6 w-full max-w-xs text-center shadow-2xl border border-white/50">
+        <div class="relative w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+          <svg class="absolute inset-0 w-full h-full transform -rotate-90">
+            <circle cx="40" cy="40" r="36" stroke="#f5f5f7" stroke-width="4" fill="transparent"/>
+            <circle id="progressCircle" cx="40" cy="40" r="36" stroke="#007aff" stroke-width="4" fill="transparent"
+              stroke-dasharray="226.2" stroke-dashoffset="0" class="transition-all duration-100"/>
+          </svg>
+          <span id="countdownNumber" class="text-2xl font-bold text-[#1d1d1f]">5</span>
+        </div>
+        <p class="font-bold text-[#1d1d1f]">通知予約中</p>
+        <p class="text-xs text-[#86868b] mt-1">バックグラウンド状態でも通知されます</p>
+        <button onclick="cancelTimer()" class="mt-4 px-4 py-2 bg-red-50 hover:bg-red-100 text-[#ff3b30] text-xs font-bold rounded-full btn-bounce">
+          キャンセル
+        </button>
+      </div>
+    </div>
+
+    <!-- トースト表示 -->
+    <div id="toastContainer" class="fixed bottom-8 left-4 right-4 z-50 pointer-events-none flex flex-col gap-2"></div>
+
+  </main>
+
+  <script>
+    lucide.createIcons();
+
+    let notificationTimer = null;
+    let countdownInterval = null;
+
+    window.addEventListener('load', () => {
+      checkPermission();
+    });
+
+    // 通知パーミッションの確認（WebView環境とブラウザ両対応）
+    function checkPermission() {
+      const statusIcon = document.getElementById('statusIcon');
+      const statusText = document.getElementById('statusText');
+      const btnPermission = document.getElementById('btnPermission');
+
+      // AndroidネイティブのJavascriptInterfaceが定義されているかチェック
+      if (window.AndroidNotificationBridge) {
+        const isGranted = window.AndroidNotificationBridge.isNotificationEnabled();
+        if (isGranted) {
+          setPermissionUI("granted", "アプリ通知有効");
+        } else {
+          setPermissionUI("denied", "通知が制限されています");
+        }
+        return;
+      }
+
+      // 通常ブラウザのチェック
+      if (!("Notification" in window)) {
+        setPermissionUI("unsupported", "未対応デバイス");
+        return;
+      }
+
+      setPermissionUI(Notification.permission, 
+        Notification.permission === "granted" ? "通信テスト可能" : 
+        Notification.permission === "denied" ? "通知が拒否されています" : "権限が必要です"
+      );
+    }
+
+    function setPermissionUI(state, text) {
+      const statusIcon = document.getElementById('statusIcon');
+      const statusText = document.getElementById('statusText');
+      const btnPermission = document.getElementById('btnPermission');
+
+      statusText.innerText = text;
+
+      if (state === "granted") {
+        statusText.className = "text-sm font-semibold text-[#34c759]";
+        statusIcon.className = "w-8 h-8 rounded-full flex items-center justify-center bg-emerald-50 text-[#34c759]";
+        statusIcon.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5"></i>';
+        btnPermission.classList.add('hidden');
+      } else if (state === "denied") {
+        statusText.className = "text-sm font-semibold text-[#ff3b30]";
+        statusIcon.className = "w-8 h-8 rounded-full flex items-center justify-center bg-rose-50 text-[#ff3b30]";
+        statusIcon.innerHTML = '<i data-lucide="x-circle" class="w-5 h-5"></i>';
+        btnPermission.classList.remove('hidden');
+        btnPermission.innerText = "権限を要求";
+      } else {
+        statusText.className = "text-sm font-semibold text-[#ff9500]";
+        statusIcon.className = "w-8 h-8 rounded-full flex items-center justify-center bg-amber-50 text-[#ff9500]";
+        statusIcon.innerHTML = '<i data-lucide="alert-circle" class="w-5 h-5"></i>';
+        btnPermission.classList.remove('hidden');
+      }
+      lucide.createIcons();
+    }
+
+    // 権限リクエスト実行
+    async function requestPermission() {
+      // 1. Androidアプリ（WebView）ビルド向けにインターフェースが公開されている場合
+      if (window.AndroidNotificationBridge) {
+        showToast("OSの通知設定を開きます...", "info");
+        window.AndroidNotificationBridge.requestNotificationPermission();
+        // Native側のアクション完了後に状態が再確認されるよう少し遅らせる
+        setTimeout(checkPermission, 1500);
+        return;
+      }
+
+      // 2. 標準ブラウザ向け
+      if ("Notification" in window) {
+        const permission = await Notification.requestPermission();
+        checkPermission();
+        if (permission === "granted") {
+          showToast("通知が許可されました", "success");
+        } else {
+          showToast("通知権限が拒否されました", "error");
+        }
+      } else {
+        showToast("この端末は通知に非対応です", "error");
+      }
+    }
+
+    // 本物の通知を送るコアロジック
+    function triggerSystemNotification(title, body) {
+      // 1. Androidネイティブブリッジ経由での送信（最優先：APK化した場合に確実に鳴るルート）
+      if (window.AndroidNotificationBridge) {
+        window.AndroidNotificationBridge.showNotification(title, body);
+        return;
+      }
+
+      // 2. 通常のブラウザ用 Notification API
+      if ("Notification" in window && Notification.permission === "granted") {
+        try {
+          const options = {
+            body: body,
+            vibrate: [200, 100, 200],
+            requireInteraction: true
+          };
+          new Notification(title, options);
+        } catch (e) {
+          // モバイルブラウザによってはServiceWorker経由でないと動かない場合があるためフォールバック
+          if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.ready.then(reg => {
+              reg.showNotification(title, { body: body });
+            });
+          }
+        }
+      }
+    }
+
+    function sendNow() {
+      const title = document.getElementById('notiTitle').value.trim() || "通知テスト";
+      const body = document.getElementById('notiBody').value.trim() || "通知メッセージ";
+
+      triggerSystemNotification(title, body);
+      showToast("通知シグナルを発信しました", "success");
+    }
+
+    function sendLater() {
+      const title = document.getElementById('notiTitle').value.trim() || "通知テスト";
+      const body = document.getElementById('notiBody').value.trim() || "通知メッセージ";
+      const delayInput = document.getElementById('delaySeconds');
+      let seconds = parseInt(delayInput.value, 10);
+
+      if (isNaN(seconds) || seconds <= 0) {
+        showToast("秒数を正しく入力してください", "warning");
+        return;
+      }
+
+      const totalSeconds = seconds;
+      const overlay = document.getElementById('countdownOverlay');
+      const numberSpan = document.getElementById('countdownNumber');
+      const progressCircle = document.getElementById('progressCircle');
+      
+      overlay.classList.remove('hidden');
+      numberSpan.innerText = seconds;
+
+      const radius = 36;
+      const circumference = 2 * Math.PI * radius;
+      progressCircle.style.strokeDasharray = circumference;
+      progressCircle.style.strokeDashoffset = 0;
+
+      countdownInterval = setInterval(() => {
+        seconds--;
+        numberSpan.innerText = seconds;
+        const offset = circumference - (seconds / totalSeconds) * circumference;
+        progressCircle.style.strokeDashoffset = offset;
+
+        if (seconds <= 0) {
+          clearInterval(countdownInterval);
+        }
+      }, 1000);
+
+      notificationTimer = setTimeout(() => {
+        triggerSystemNotification(title, body);
+        overlay.classList.add('hidden');
+        showToast("スケジュールされた通知を送信しました", "success");
+        clearInterval(countdownInterval);
+      }, totalSeconds * 1000);
+
+      showToast(`${totalSeconds}秒後にシステム通知を予約しました`, "info");
+    }
+
+    function cancelTimer() {
+      if (notificationTimer) clearTimeout(notificationTimer);
+      if (countdownInterval) clearInterval(countdownInterval);
+      document.getElementById('countdownOverlay').classList.add('hidden');
+      showToast("通知送信をキャンセルしました", "warning");
+    }
+
+    function showToast(message, type = "info") {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      let bg = "bg-white/95 text-[#1d1d1f]";
+      let icon = "info";
+      let iconColor = "text-[#007aff]";
+
+      if (type === "success") { icon = "check-circle"; iconColor = "text-[#34c759]"; }
+      else if (type === "error") { icon = "x-circle"; iconColor = "text-[#ff3b30]"; }
+      else if (type === "warning") { icon = "alert-triangle"; iconColor = "text-[#ff9500]"; }
+
+      toast.className = `toast-anim pointer-events-auto flex items-center gap-3 px-5 py-3.5 rounded-2xl ${bg} shadow-[0_12px_40px_rgba(0,0,0,0.1)] border border-white/20 w-full max-w-sm mx-auto`;
+      toast.innerHTML = `
+        <div class="${iconColor} flex-shrink-0"><i data-lucide="${icon}" class="w-5 h-5"></i></div>
+        <p class="text-sm font-semibold flex-grow">${message}</p>
+      `;
+
+      container.appendChild(toast);
+      lucide.createIcons();
+
+      setTimeout(() => {
+        toast.style.transform = "translateY(100px) scale(0.9)";
+        toast.style.opacity = "0";
+        toast.style.transition = "all 0.4s cubic-bezier(0.16, 1, 0.3, 1)";
+        setTimeout(() => { toast.remove(); }, 400);
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
